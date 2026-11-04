@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>川渡りパズル</title>
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root{
+  --bg:#eef7fb; --card:#ffffff; --ink:#22303a; --sub:#5d7183;
+  --accent:#1f7fb8; --accent2:#e07b2a; --line:#cfe3ee;
+  --gold:#e9a13b; --danger:#c0392b; --ok:#2e7d5b;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px}
+header h1{font-size:24px;margin:6px 0 2px}
+header p{margin:0 0 10px;color:var(--sub);font-size:13px}
+.topbar{display:flex;gap:8px;align-items:center;margin:8px 0 12px}
+.sound-btn{border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;font-size:14px;cursor:pointer}
+.stage-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.stage-row button{border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 13px;font-size:14px;cursor:pointer}
+.stage-row button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:999px;overflow:hidden}
+.seg button{border:0;background:#fff;color:var(--ink);padding:8px 14px;font-size:15px;cursor:pointer}
+.seg button.on{background:var(--accent2);color:#fff;font-weight:700}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.card h2{font-size:17px;margin:2px 0 8px}
+.card p,.card li{font-size:14px;line-height:1.75}
+.card ul{margin:6px 0;padding-left:22px}
+.btn{border:1.5px solid var(--accent);background:var(--accent);color:#fff;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:700;cursor:pointer}
+.btn.go{background:var(--accent2);border-color:var(--accent2);font-size:17px;padding:12px 26px}
+.btn.sub{background:#fff;color:var(--accent)}
+.btn.ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+canvas.stage{width:100%;height:auto;display:block;border:1.5px solid var(--line);border-radius:12px;background:#bfe6f5;touch-action:manipulation}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
+.chip{background:#f2f9fd;border:1.5px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13.5px}
+.chip b{color:var(--accent)}
+.status{font-weight:700;color:var(--ok);min-height:1.5em;font-size:14.5px;line-height:1.6}
+.status.warn{color:var(--danger)}
+.note{font-size:12.5px;color:var(--sub);line-height:1.7}
+#bootError{display:none;background:#fdecea;border:2px solid var(--danger);color:var(--danger);border-radius:12px;padding:14px;font-size:14px;line-height:1.7;margin:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🚣 川渡りパズル</h1>
+    <p>全員を船で向こう岸へ渡す、考えるパズルです。危ない組み合わせを残さないように、順番を工夫しましょう</p>
+  </header>
+  <div class="topbar">
+    <button class="sound-btn" id="soundBtn" type="button">🔊 音：オン</button>
+  </div>
+
+  <div class="stage-row" id="stageRow"></div>
+  <div class="card" style="padding:10px 14px">
+    <span class="seg" id="presetSeg"></span>
+    <p class="note" id="presetDesc" style="margin:8px 0 0"></p>
+  </div>
+
+  <div class="card">
+    <h2 id="stageTitle"></h2>
+    <p id="stageStory"></p>
+    <canvas class="stage" id="scene" width="720" height="470"></canvas>
+    <div class="chips">
+      <span class="chip">手数 <b id="chipMoves">0</b></span>
+      <span class="chip">この条件の最短 <b id="chipBest">-</b> 手</span>
+      <span class="chip">いまの場所から最短 <b id="chipRest">-</b> 手</span>
+      <span class="chip">船の定員 <b id="chipCap">-</b> 人</span>
+    </div>
+    <p class="status" id="status"></p>
+    <div class="btn-row">
+      <button class="btn go" id="goBtn" type="button">しゅっぱつ！</button>
+      <button class="btn sub" id="undoBtn" type="button">1つもどす</button>
+      <button class="btn sub" id="hintBtn" type="button">ヒント</button>
+      <button class="btn ghost" id="resetBtn" type="button">最初から</button>
+    </div>
+    <p class="note">岸にいる人をタップすると船に乗ります。船の上の人をタップすると岸に戻ります。漕げる人が1人以上乗っていないと出発できません。</p>
+  </div>
+
+  <div class="card">
+    <h2>このステージのルール</h2>
+    <ul id="ruleList"></ul>
+  </div>
+
+  <div class="card">
+    <h2>ワークシート</h2>
+    <p>このステージ・この条件の問題を、紙で考えるためのワークシートに書き出せます。条件文、手順の記録表、考えを書く欄、ふりかえり欄が入っています。書き出しはA4・300dpiの画像です。</p>
+    <div class="btn-row">
+      <button class="btn" id="sheetBtn" type="button">ワークシートを書き出す</button>
+    </div>
+    <p class="status" id="sheetStatus"></p>
+    <div id="sheetResult" style="display:none;margin-top:10px">
+      <img id="sheetImg" alt="ワークシートの画像" style="width:100%;height:auto;border:1.5px solid var(--line);border-radius:12px;background:#fff">
+      <p class="note">画像を長押しして「写真に追加」を選ぶと保存できます（パソコンでは下のボタンからも保存できます）。印刷はA4判・倍率「実際のサイズ（100%）」で。</p>
+      <div class="btn-row"><a class="btn ghost" id="sheetDl" href="#" download style="text-decoration:none">画像をダウンロード</a></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>遊び方</h2>
+    <ul>
+      <li>全員を左岸から右岸へ渡せばクリアです。船は往復とも数えます（1回渡るごとに1手）。</li>
+      <li>危ない組み合わせが岸に残る乗せ方では、出発できません。警告が出たら、乗せる人を変えてみましょう。</li>
+      <li>「ヒント」は、いまの場所から最短でゴールできる次の一手を教えてくれます。</li>
+      <li>紙で考えたいときは、ワークシートを印刷して、手順を書きながら考えるのがおすすめです。</li>
+    </ul>
+  </div>
+</div>
+<div id="bootError">アプリの起動に失敗しました。ページを再読み込みしてみてください。</div>
+<noscript><div style="padding:16px">このアプリは JavaScript を使います。ブラウザの設定で有効にしてください。</div></noscript>
+<script>
+"use strict";
+/* 川渡りパズル 汎用エンジン（アプリと検証で共用）
+   状態：左岸にいる実体の集合＋船の位置。船上の人は「移動中の選択」として扱い、静止状態には含めない。 */
+
+/* sel: {id:'wolf'} または {group:'monkey'} */
+function selMatch(sel, e) { if (sel.id) return e.id === sel.id; if (sel.group === 'family') return !!e.family; return e.group === sel.group; }
+function anyIn(bank, sel, entities) { return bank.some(id => selMatch(sel, entities[id])); }
+function countIn(bank, sel, entities) { return bank.filter(id => selMatch(sel, entities[id])).length; }
+
+/* 危険判定：岸の実体集合が危険なら {label, ids:[関係する実体id]}、安全なら null */
+function checkBank(stage, bankIds, entities) {
+  for (const rule of stage.rules) {
+    if (rule.kind === 'pair') {
+      if (rule.guard && anyIn(bankIds, rule.guard, entities)) continue;
+      if (anyIn(bankIds, rule.x, entities) && anyIn(bankIds, rule.y, entities)) {
+        const ids = bankIds.filter(id => selMatch(rule.x, entities[id]) || selMatch(rule.y, entities[id]));
+        return { label: rule.label, ids };
+      }
+    } else if (rule.kind === 'anyPair') {
+      if (rule.guard && anyIn(bankIds, rule.guard, entities)) continue;
+      const xs = bankIds.filter(id => selMatch(rule.x, entities[id]));
+      const ys = bankIds.filter(id => selMatch(rule.y, entities[id]));
+      if (xs.length && ys.length) return { label: rule.label, ids: xs.concat(ys) };
+    } else if (rule.kind === 'count') {
+      const cx = countIn(bankIds, rule.x, entities), cy = countIn(bankIds, rule.y, entities);
+      if (cx > 0 && cx < cy) {
+        const ids = bankIds.filter(id => selMatch(rule.x, entities[id]) || selMatch(rule.y, entities[id]));
+        return { label: rule.label, ids };
+      }
+    }
+  }
+  return null;
+}
+
+function stageEntities(stage, preset) {
+  const map = {};
+  for (const e of stage.cast(preset)) map[e.id] = e;
+  return map;
+}
+function allIds(entities) { return Object.keys(entities); }
+
+/* 1手の生成：船のある岸から、定員以内・漕げる人が1人以上・出発岸と到着岸が安全な乗船集合を列挙 */
+function legalMoves(stage, preset, entities, leftSet, boatSide) {
+  const all = allIds(entities);
+  const from = boatSide === 'L' ? [...leftSet] : all.filter(id => !leftSet.has(id));
+  const to = boatSide === 'L' ? all.filter(id => !leftSet.has(id)) : [...leftSet];
+  const moves = [];
+  const n = from.length;
+  const cap = preset.cap;
+  // 部分集合を列挙（from は最大11要素、定員は最大3）
+  const idx = [];
+  function rec(start, chosen) {
+    if (chosen.length > 0) {
+      const pass = chosen.map(i => from[i]);
+      if (pass.some(id => entities[id].rower)) {
+        const newFrom = from.filter(id => !pass.includes(id));
+        const newTo = to.concat(pass);
+        if (!checkBank(stage, newFrom, entities) && !checkBank(stage, newTo, entities)) {
+          const newLeft = boatSide === 'L' ? new Set(newFrom) : new Set(newTo);
+          moves.push({ pass, newLeft });
+        }
+      }
+    }
+    if (chosen.length === cap) return;
+    for (let i = start; i < n; i++) { chosen.push(i); rec(i + 1, chosen); chosen.pop(); }
+  }
+  rec(0, idx);
+  return moves;
+}
+
+/* BFS：最短手数と、初期状態からの最短路の最初の一手などを返す */
+function solve(stage, preset) {
+  const entities = stageEntities(stage, preset);
+  const all = allIds(entities);
+  const start = new Set(all);
+  const key = (left, side) => [...left].sort().join(',') + '|' + side;
+  const dist = new Map([[key(start, 'L'), 0]]);
+  const prev = new Map();
+  const queue = [{ left: start, side: 'L' }];
+  let goalKey = null;
+  while (queue.length) {
+    const cur = queue.shift();
+    const d = dist.get(key(cur.left, cur.side));
+    if (cur.left.size === 0 && cur.side === 'R') { goalKey = key(cur.left, cur.side); break; }
+    for (const mv of legalMoves(stage, preset, entities, cur.left, cur.side)) {
+      const nside = cur.side === 'L' ? 'R' : 'L';
+      const k = key(mv.newLeft, nside);
+      if (!dist.has(k)) {
+        dist.set(k, d + 1);
+        prev.set(k, { from: key(cur.left, cur.side), pass: mv.pass });
+        queue.push({ left: mv.newLeft, side: nside });
+      }
+    }
+  }
+  if (goalKey === null) return { solvable: false, shortest: null, path: null, entities };
+  const path = [];
+  let k = goalKey;
+  while (prev.has(k)) { const p = prev.get(k); path.unshift(p.pass); k = p.from; }
+  return { solvable: true, shortest: path.length, path, entities };
+}
+
+/* 現在状態からの最短手数と次の一手（ヒント用） */
+function hintFrom(stage, preset, entities, leftSet, boatSide) {
+  const all = allIds(entities);
+  const key = (left, side) => [...left].sort().join(',') + '|' + side;
+  const startK = key(leftSet, boatSide);
+  if (leftSet.size === 0 && boatSide === 'R') return { dist: 0, pass: null };
+  const dist = new Map([[startK, 0]]);
+  const prev = new Map();
+  const queue = [{ left: new Set(leftSet), side: boatSide }];
+  while (queue.length) {
+    const cur = queue.shift();
+    const d = dist.get(key(cur.left, cur.side));
+    for (const mv of legalMoves(stage, preset, entities, cur.left, cur.side)) {
+      const nside = cur.side === 'L' ? 'R' : 'L';
+      const kk = key(mv.newLeft, nside);
+      if (!dist.has(kk)) {
+        dist.set(kk, d + 1);
+        prev.set(kk, { from: key(cur.left, cur.side), pass: mv.pass });
+        if (mv.newLeft.size === 0 && nside === 'R') {
+          // 逆向きにたどって最初の一手を取り出す
+          let ck = kk; const chain = [];
+          while (prev.has(ck)) { const p = prev.get(ck); chain.unshift(p.pass); ck = p.from; }
+          return { dist: d + 1, pass: chain[0] };
+        }
+        queue.push({ left: mv.newLeft, side: nside });
+      }
+    }
+  }
+  return { dist: null, pass: null };
+}
+
+
+/* ステージ定義（このアプリのために書き起こしたルール。古典的なパズルの構造に基づく） */
+const P = (id, name, emoji, group, rower, animal) => ({ id, name, emoji, group, rower: !!rower, animal: !!animal });
+
+const STAGE_FARM2_RULES = [
+  { kind: 'pair', x: { id: 'lion' }, y: { id: 'llama' }, guard: { id: 'farmer' }, label: 'ライオンとラマ' },
+  { kind: 'pair', x: { id: 'llama' }, y: { id: 'lettuce' }, guard: { id: 'farmer' }, label: 'ラマとレタス' },
+  { kind: 'pair', x: { id: 'leviathan' }, y: { id: 'lion' }, guard: { id: 'farmer' }, label: 'リバイアサンとライオン' }
+];
+const STAGES = [
+  {
+    key: 'classic', title: '古典編 ― オオカミ・ヤギ・キャベツ', short: '古典編',
+    story: '農夫がオオカミとヤギとキャベツを、船で向こう岸へ運びます。農夫がいない岸で、オオカミとヤギ、ヤギとキャベツが残ると危ない組み合わせになります。',
+    cast: (pr) => {
+      const list = [
+        P('farmer', '農夫', '🧑‍🌾', 'farmer', true),
+        P('wolf', 'オオカミ', '🐺', 'item', false, true),
+        P('goat', 'ヤギ', '🐐', 'item', false, true),
+        P('cabbage', 'キャベツ', '🥬', 'item')
+      ];
+      if (pr && pr.extra === 'chicken') list.push(P('chicken', 'ニワトリ', '🐔', 'item', false, true));
+      return list;
+    },
+    rules: [
+      { kind: 'pair', x: { id: 'wolf' }, y: { id: 'goat' }, guard: { id: 'farmer' }, label: 'オオカミとヤギ' },
+      { kind: 'pair', x: { id: 'goat' }, y: { id: 'cabbage' }, guard: { id: 'farmer' }, label: 'ヤギとキャベツ' }
+    ],
+    ruleText: ['農夫だけが船を漕げます', '農夫がいない岸で「オオカミとヤギ」が残ると危ない組み合わせです', '農夫がいない岸で「ヤギとキャベツ」が残ると危ない組み合わせです'],
+    presets: [
+      { key: 'easy', name: 'やさしい', cap: 3 },
+      { key: 'normal', name: 'ふつう', cap: 2 },
+      { key: 'hard', name: 'むずかしい', cap: 2, extra: 'chicken' }
+    ]
+  },
+  {
+    key: 'monkey', title: 'ヒトとサル編', short: 'ヒトとサル編',
+    story: 'ヒト3人と、大きいサル1匹・小さいサル2匹を向こう岸へ渡します。漕げるのはヒトと大きいサルだけ。どちらの岸でも、ヒトがいる場合は「ヒトの数≧サルの数」でないと危ない組み合わせになります。サルは着岸すると船から飛び降ります。',
+    cast: (pr) => {
+      const n = pr.humans, sm = pr.small;
+      const list = [];
+      for (let i = 0; i < n; i++) list.push(P('human' + (i + 1), 'ヒト' + (i + 1), '🧑', 'human', true));
+      list.push(P('bigmonkey', '大きいサル', '🦧', 'monkey', true, true));
+      for (let i = 0; i < sm; i++) list.push(P('small' + (i + 1), '小さいサル' + (i + 1), '🐵', 'monkey', false, true));
+      return list;
+    },
+    rules: [
+      { kind: 'count', x: { group: 'human' }, y: { group: 'monkey' }, label: 'ヒトよりサルの数が多い' }
+    ],
+    ruleText: ['漕げるのはヒトと大きいサルだけです', 'どちらの岸でも、ヒトがいる岸では「ヒトの数≧サルの数」を守ります'],
+    presets: [
+      { key: 'easy', name: 'やさしい', cap: 2, humans: 2, small: 1 },
+      { key: 'normal', name: 'ふつう', cap: 2, humans: 3, small: 2 },
+      { key: 'hard', name: 'むずかしい', cap: 2, humans: 5, small: 3 }
+    ]
+  },
+  {
+    key: 'missionary', title: '宣教師と人食い編', short: '宣教師編',
+    story: '宣教師と人食いが同じ人数ずついます。全員が船を漕げます。どちらの岸でも、宣教師がいる場合は「宣教師の数≧人食いの数」でないと危ない組み合わせになります。',
+    cast: (pr) => {
+      const list = [];
+      for (let i = 0; i < pr.pairs; i++) list.push(P('mis' + (i + 1), '宣教師' + (i + 1), '🧑‍🦱', 'mis', true));
+      for (let i = 0; i < pr.pairs; i++) list.push(P('can' + (i + 1), '人食い' + (i + 1), '🧑‍🦰', 'can', true));
+      return list;
+    },
+    rules: [
+      { kind: 'count', x: { group: 'mis' }, y: { group: 'can' }, label: '宣教師より人食いの数が多い' }
+    ],
+    ruleText: ['全員が船を漕げます', 'どちらの岸でも、宣教師がいる岸では「宣教師の数≧人食いの数」を守ります'],
+    presets: [
+      { key: 'easy', name: 'やさしい', cap: 2, pairs: 2 },
+      { key: 'normal', name: 'ふつう', cap: 2, pairs: 3 },
+      { key: 'hard', name: 'むずかしい', cap: 3, pairs: 4 }
+    ]
+  },
+  {
+    key: 'farm2', title: '農夫とレタスとライオンとラマ編', short: 'ライオン・ラマ編',
+    story: '農夫がレタス・ラマ・ライオン・リバイアサンを運びます。農夫がいない岸では、ライオンとラマ、ラマとレタス、リバイアサンとライオンが残ると危ない組み合わせになります。',
+    cast: (pr) => {
+      const list = [
+        P('farmer', '農夫', '🧑‍🌾', 'farmer', true),
+        P('lettuce', 'レタス', '🥬', 'item'),
+        P('llama', 'ラマ', '🦙', 'item', false, true),
+        P('lion', 'ライオン', '🦁', 'item', false, true)
+      ];
+      if (pr.leviathan) list.push(P('leviathan', 'リバイアサン', '🐉', 'item', false, true));
+      if (pr.assistant) {
+        list[0] = { ...list[0], group: 'guard' };
+        list.splice(1, 0, { ...P('assistant', '助手', '🧑', 'guard', true) });
+      }
+      return list;
+    },
+    rulesFor: (pr) => {
+      if (pr && pr.assistant) return STAGE_FARM2_RULES.map(r => ({ ...r, guard: { group: 'guard' } }));
+      return STAGE_FARM2_RULES;
+    },
+    rules: STAGE_FARM2_RULES,
+    ruleText: ['農夫だけが船を漕げます', '農夫がいない岸で「ライオンとラマ」「ラマとレタス」「リバイアサンとライオン」が残ると危ない組み合わせです'],
+    presets: [
+      { key: 'easy', name: 'やさしい', cap: 3, leviathan: false },
+      { key: 'normal', name: 'ふつう', cap: 2, leviathan: false },
+      { key: 'hard', name: 'むずかしい', cap: 2, leviathan: true, assistant: true }
+    ]
+  },
+  {
+    key: 'family', title: '家族と警官・泥棒編', short: '家族編',
+    story: 'パパ・ママ・娘3人・息子3人・泥棒・警官の10人を向こう岸へ渡します。漕げるのはパパ・ママ・警官だけ。警官がいない所で泥棒と家族が一緒になること、ママがいない所でパパと娘が一緒になること、パパがいない所でママと息子が一緒になることが、危ない組み合わせです。',
+    cast: (pr) => {
+      const list = [
+        P('dad', 'パパ', '👨', 'dad', true),
+        P('mom', 'ママ', '👩', 'mom', true)
+      ];
+      for (let i = 0; i < pr.daughters; i++) list.push(P('dau' + (i + 1), '娘' + (i + 1), '👧', 'daughter'));
+      for (let i = 0; i < pr.sons; i++) list.push(P('son' + (i + 1), '息子' + (i + 1), '👦', 'son'));
+      list.push(P('thief', '泥棒', '🦹', 'thief'));
+      list.push(P('cop', '警官', '👮', 'cop', true));
+      return list;
+    },
+    rules: [
+      { kind: 'anyPair', x: { group: 'thief' }, y: { group: 'family' }, guard: { id: 'cop' }, label: '警官のいない所での泥棒と家族' },
+      { kind: 'anyPair', x: { id: 'dad' }, y: { group: 'daughter' }, guard: { id: 'mom' }, label: 'ママのいない所でのパパと娘' },
+      { kind: 'anyPair', x: { id: 'mom' }, y: { group: 'son' }, guard: { id: 'dad' }, label: 'パパのいない所でのママと息子' }
+    ],
+    ruleText: ['漕げるのはパパ・ママ・警官だけです', '警官がいない所で、泥棒と家族が一緒になると危ない組み合わせです', 'ママがいない所でパパと娘が、パパがいない所でママと息子が一緒になると危ない組み合わせです'],
+    presets: [
+      { key: 'easy', name: 'やさしい', cap: 3, daughters: 2, sons: 2 },
+      { key: 'normal', name: 'ふつう', cap: 3, daughters: 3, sons: 3 },
+      { key: 'hard', name: 'むずかしい', cap: 3, daughters: 4, sons: 4 }
+    ]
+  }
+];
+/* 家族グループ（泥棒ルール用）：cast に family グループを付け直す */
+for (const st of STAGES) {
+  if (st.key === 'family') {
+    const orig = st.cast;
+    st.cast = (pr) => orig(pr).map(e => (['dad', 'mom', 'daughter', 'son'].includes(e.group) ? { ...e, group: e.group, family: true } : e));
+  }
+}
+function resolveStage(stage, preset) {
+  return { ...stage, rules: stage.rulesFor ? stage.rulesFor(preset) : stage.rules };
+}
+
+/* ===== 川渡りパズル アプリ本体 ===== */
+
+/* ---------- 音（Web Audio合成） ---------- */
+const Sound = {
+  ctx: null, enabled: true,
+  ensure() {
+    if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this.ctx = null; } }
+    if (this.ctx && this.ctx.state === 'suspended' && this.ctx.resume) { try { const p = this.ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+    return this.ctx;
+  },
+  tone(f0, dur, vol, delay, type, f1) {
+    const ctx = this.ensure(); if (!ctx || !this.enabled) return;
+    const t = ctx.currentTime + (delay || 0);
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(f0, t);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  },
+  noise(dur, vol, delay, freq, q) {
+    const ctx = this.ensure(); if (!ctx || !this.enabled) return;
+    const t = ctx.currentTime + (delay || 0);
+    const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 900; f.Q.value = q || 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(ctx.destination);
+    src.start(t); src.stop(t + dur + 0.05);
+  },
+  pop() { this.tone(620, 0.07, 0.10, 0, 'sine', 320); },
+  step() { this.noise(0.05, 0.05, 0, 500, 1); },
+  hop() { this.tone(300, 0.16, 0.10, 0, 'sine', 660); },
+  splash(delay) { this.noise(0.28, 0.16, delay || 0, 750, 0.7); },
+  creak(delay) { this.tone(140, 0.22, 0.05, delay || 0, 'triangle', 85); },
+  rowing(durSec) {
+    // 漕ぐ音：櫂のきしみ＋水しぶきを周期的に、水の音を下に敷く
+    const strokes = Math.max(2, Math.round(durSec / 0.62));
+    for (let i = 0; i < strokes; i++) { this.creak(i * 0.62); this.splash(i * 0.62 + 0.08); }
+    this.noise(durSec, 0.045, 0, 420, 0.4);
+  },
+  warn() { this.tone(392, 0.14, 0.14, 0, 'square'); this.tone(311, 0.22, 0.14, 0.15, 'square'); },
+  fanfare() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.22, 0.13, i * 0.13, 'triangle')); this.noise(0.5, 0.05, 0.5, 3000, 0.6); }
+};
+
+/* ---------- ゲーム状態 ---------- */
+const G = {
+  stageIdx: 0, presetKey: 'normal',
+  stage: null, preset: null, entities: {},
+  pos: {}, boat: [], boatSide: 'L',
+  moves: 0, history: [], cleared: false,
+  hintIds: [], warnIds: [], warnUntil: 0, warnText: '',
+  best: null, rest: null
+};
+const vis = {};        // id -> {x, y}
+let boatX = 268;       // 船の中心x（ドックL=268, R=452）
+let boatAnim = null;   // {t0, dur, from, to}
+let confetti = [];
+let busy = false;
+
+const SCENE = { W: 720, H: 470, waterY: 300, dockL: 268, dockR: 452, boatY: 352 };
+
+function castList() { return G.stage.cast(G.preset); }
+function leftSet() { return new Set(Object.keys(G.entities).filter(id => G.pos[id] === 'L')); }
+
+function bankSlot(side, idx, count) {
+  const rows = count <= 6 ? 2 : 3;
+  const cols = Math.ceil(count / rows);
+  const col = idx % cols, row = Math.floor(idx / cols);
+  const baseX = side === 'L' ? 30 : 538;
+  const span = 152;
+  const x = cols === 1 ? baseX + span / 2 : baseX + span * (col / (cols - 1));
+  const ys = rows === 2 ? [238, 292] : [224, 266, 308];
+  return { x, y: ys[row] };
+}
+function bankSlots(side) {
+  const ids = castList().map(e => e.id).filter(id => G.pos[id] === side && !G.boat.includes(id));
+  const map = {};
+  ids.forEach((id, i) => { map[id] = bankSlot(side, i, ids.length); });
+  return map;
+}
+function boatSlot(idx) { return { x: boatX + (idx - (G.preset.cap - 1) / 2) * 40, y: SCENE.boatY - 26 }; }
+function targetOf(id) {
+  const bi = G.boat.indexOf(id);
+  if (bi >= 0) return boatSlot(bi);
+  return bankSlots(G.pos[id])[id];
+}
+
+/* ---------- アニメーション（歩行・跳躍・移動） ---------- */
+const tweens = [];
+function addTween(id, to, dur, hop) {
+  return new Promise(res => {
+    const from = { x: vis[id].x, y: vis[id].y };
+    tweens.push({ id, from, to, t0: performance.now(), dur, hop: !!hop, res });
+    if (hop) Sound.hop();
+    else { Sound.step(); setTimeout(() => Sound.step(), dur * 0.45); }
+  });
+}
+function stepTweens(now) {
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    let t = Math.min(1, (now - tw.t0) / tw.dur);
+    const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const x = tw.from.x + (tw.to.x - tw.from.x) * e;
+    let y = tw.from.y + (tw.to.y - tw.from.y) * e;
+    if (tw.hop) y -= Math.sin(t * Math.PI) * 30;
+    else y -= Math.abs(Math.sin(t * Math.PI * 3)) * 4;
+    vis[tw.id].x = x; vis[tw.id].y = y;
+    if (t >= 1) { vis[tw.id].x = tw.to.x; vis[tw.id].y = tw.to.y; tweens.splice(i, 1); tw.res(); }
+  }
+}
+
+/* ---------- 場面描画 ---------- */
+function drawScene(now) {
+  const cv = document.getElementById('scene');
+  const ctx = cv.getContext('2d');
+  const W = SCENE.W, H = SCENE.H;
+  // 空と丘
+  const sky = ctx.createLinearGradient(0, 0, 0, 200);
+  sky.addColorStop(0, '#aee3f7'); sky.addColorStop(1, '#e8f9ff');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, 200);
+  ctx.fillStyle = '#ffe9a8';
+  ctx.beginPath(); ctx.arc(648, 52, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (const [cx, cy, s] of [[120, 46, 1], [330, 30, 0.7], [520, 66, 0.85]]) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 34 * s, 13 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + 22 * s, cy + 3 * s, 24 * s, 10 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#9ccb7d';
+  ctx.beginPath();
+  ctx.moveTo(0, 200); ctx.quadraticCurveTo(180, 120, 360, 185); ctx.quadraticCurveTo(540, 235, 720, 175); ctx.lineTo(720, 210); ctx.lineTo(0, 210); ctx.closePath(); ctx.fill();
+  // 岸（草地）
+  ctx.fillStyle = '#7cb45e';
+  ctx.fillRect(0, 195, 208, 275);
+  ctx.fillRect(512, 195, 208, 275);
+  ctx.fillStyle = '#8fca72';
+  for (let i = 0; i < 26; i++) {
+    const x = (i * 173) % 700 + 6, y = 205 + (i * 97) % 90;
+    if (x > 200 && x < 520) continue;
+    ctx.fillRect(x, y, 3, 9);
+  }
+  // 川
+  const wat = ctx.createLinearGradient(0, SCENE.waterY - 40, 0, H);
+  wat.addColorStop(0, '#5db9dd'); wat.addColorStop(1, '#2f7fb8');
+  ctx.fillStyle = wat;
+  ctx.beginPath();
+  ctx.moveTo(196, 250); ctx.lineTo(524, 250); ctx.lineTo(556, 470); ctx.lineTo(164, 470); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2;
+  for (let i = 0; i < 5; i++) {
+    const y = 330 + i * 28, off = Math.sin(now / 700 + i * 1.7) * 8;
+    ctx.beginPath();
+    for (let x = 215; x <= 505; x += 24) ctx.lineTo(x, y + Math.sin((x + off * 6) / 26 + i) * 2.5);
+    ctx.stroke();
+  }
+  // 桟橋
+  ctx.fillStyle = '#a9743f';
+  ctx.fillRect(178, 322, 62, 10); ctx.fillRect(480, 322, 62, 10);
+  ctx.fillStyle = '#8a5a2e';
+  ctx.fillRect(196, 332, 8, 26); ctx.fillRect(222, 332, 8, 26); ctx.fillRect(492, 332, 8, 26); ctx.fillRect(518, 332, 8, 26);
+  // 岸のラベル
+  ctx.fillStyle = 'rgba(34,48,58,0.75)';
+  ctx.font = '700 15px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('こちら岸', 100, 222);
+  ctx.fillText('むこう岸', 620, 222);
+
+  /* 船 */
+  let rock = 0;
+  if (boatAnim) {
+    const t = Math.min(1, (now - boatAnim.t0) / boatAnim.dur);
+    const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    boatX = boatAnim.from + (boatAnim.to - boatAnim.from) * e;
+    rock = Math.sin(t * Math.PI * 5) * 0.03;
+    // 航跡
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    for (let i = 0; i < 8; i++) {
+      const wx = boatX - Math.sign(boatAnim.to - boatAnim.from) * (44 + i * 13);
+      ctx.beginPath(); ctx.ellipse(wx, SCENE.boatY + 22 + (i % 3) * 4, 9 - i * 0.7, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    if (t >= 1) { boatAnim = null; }
+  }
+  const bobY = Math.sin(now / 480) * 2;
+  ctx.save();
+  ctx.translate(boatX, SCENE.boatY + bobY);
+  ctx.rotate(rock + Math.sin(now / 900) * 0.006);
+  // 櫂（漕いでいる人の側）
+  const rowerAboard = G.boat.find(id => G.entities[id].rower);
+  if (rowerAboard) {
+    const phase = boatAnim ? (now / 310) : 0.6;
+    const ang = 0.7 + Math.sin(phase) * (boatAnim ? 0.45 : 0.05);
+    ctx.save();
+    ctx.translate(6, -18);
+    ctx.rotate(ang);
+    ctx.strokeStyle = '#8a5a2e'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(30, 40); ctx.stroke();
+    ctx.fillStyle = '#a9743f';
+    ctx.beginPath(); ctx.ellipse(34, 47, 6, 12, 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    if (boatAnim) {
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      const sx = 6 + Math.sin(0.7 + Math.sin(phase) * 0.45) * 40, sy = -18 + Math.cos(0.7) * 40;
+      ctx.beginPath(); ctx.ellipse(38, 34, 7 + Math.sin(phase) * 2, 3, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // 船体
+  ctx.fillStyle = '#9c6b35';
+  ctx.beginPath();
+  ctx.moveTo(-58, -14); ctx.lineTo(58, -14); ctx.lineTo(42, 16); ctx.quadraticCurveTo(0, 26, -42, 16); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#bd8a4c';
+  ctx.fillRect(-58, -20, 116, 8);
+  ctx.strokeStyle = '#7c5326'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-58, -14); ctx.lineTo(58, -14); ctx.lineTo(42, 16); ctx.quadraticCurveTo(0, 26, -42, 16); ctx.closePath(); ctx.stroke();
+  ctx.restore();
+  // 船上の人の足元を船に合わせる
+  for (const id of G.boat) { const s = boatSlot(G.boat.indexOf(id)); vis[id].x = s.x; vis[id].y = s.y + bobY; }
+
+  /* 人物 */
+  const warnActive = now < G.warnUntil;
+  const order = castList().map(e => e.id);
+  for (const id of order) {
+    const e = G.entities[id];
+    const v = vis[id];
+    let dx = 0;
+    if (warnActive && G.warnIds.includes(id)) dx = Math.sin(now / 28) * 4;
+    // 影
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath(); ctx.ellipse(v.x + dx, v.y + 16, 15, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+    // 警告リング
+    if (warnActive && G.warnIds.includes(id)) {
+      ctx.strokeStyle = 'rgba(192,57,43,' + (0.6 + 0.4 * Math.sin(now / 90)) + ')';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.ellipse(v.x + dx, v.y + 4, 24, 26, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    // ヒントの金リング
+    if (G.hintIds.includes(id)) {
+      ctx.strokeStyle = 'rgba(233,161,59,' + (0.65 + 0.35 * Math.sin(now / 130)) + ')';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.ellipse(v.x + dx, v.y + 4, 24, 26, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.font = '33px "Apple Color Emoji","Segoe UI Emoji",sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(e.emoji, v.x + dx, v.y);
+    // 名前ラベル
+    ctx.font = '10.5px sans-serif';
+    const w = ctx.measureText(e.name).width + 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.beginPath(); ctx.roundRect(v.x + dx - w / 2, v.y + 17, w, 14, 6); ctx.fill();
+    ctx.fillStyle = '#22303a';
+    ctx.fillText(e.name, v.x + dx, v.y + 24.5);
+  }
+  ctx.textBaseline = 'alphabetic';
+
+  /* 紙吹雪 */
+  if (confetti.length) {
+    confetti = confetti.filter(p => p.life > 0);
+    for (const p of confetti) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life -= 0.008; p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-4, -2.5, 8, 5);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+  /* クリア表示 */
+  if (G.cleared) {
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.roundRect(180, 96, 360, 64, 16); ctx.fill();
+    ctx.fillStyle = '#2e7d5b';
+    ctx.font = '700 27px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('🎉 全員わたれた！ クリア！', 360, 137);
+  }
+}
+
+function loop(now) {
+  stepTweens(now);
+  drawScene(now);
+  requestAnimationFrame(loop);
+}
+
+/* ---------- ゲームの進行 ---------- */
+function setStatus(text, warn) {
+  const st = document.getElementById('status');
+  st.textContent = text;
+  st.classList.toggle('warn', !!warn);
+}
+function refreshChips() {
+  document.getElementById('chipMoves').textContent = G.moves;
+  document.getElementById('chipBest').textContent = G.best === null ? '-' : G.best;
+  document.getElementById('chipRest').textContent = G.rest === null ? '-' : G.rest;
+  document.getElementById('chipCap').textContent = G.preset.cap;
+}
+function updateRest() {
+  const h = hintFrom(G.stage, G.preset, G.entities, leftSet(), G.boatSide);
+  G.rest = h.dist;
+  refreshChips();
+  return h;
+}
+function snapshot() { return { pos: { ...G.pos }, boatSide: G.boatSide, moves: G.moves }; }
+
+function departureCheck(pass) {
+  const all = Object.keys(G.entities);
+  const fromIds = all.filter(id => G.pos[id] === G.boatSide);
+  const toIds = all.filter(id => G.pos[id] !== G.boatSide);
+  const newFrom = fromIds.filter(id => !pass.includes(id));
+  const newTo = toIds.concat(pass);
+  const d1 = checkBank(G.stage, newFrom, G.entities);
+  if (d1) return { danger: d1 };
+  const d2 = checkBank(G.stage, newTo, G.entities);
+  if (d2) return { danger: d2 };
+  return { ok: true };
+}
+
+async function board(id) {
+  if (busy || G.cleared) return;
+  if (G.boat.length >= G.preset.cap) { setStatus(`船はいっぱいです（定員${G.preset.cap}人）。`); return; }
+  G.hintIds = [];
+  G.boat.push(id);
+  Sound.pop();
+  const s = boatSlot(G.boat.indexOf(id));
+  busy = true;
+  // 既に船にいる人の座席を詰め直す
+  const shifts = G.boat.slice(0, -1).map((pid, i) => addTween(pid, boatSlot(i), 160, false));
+  const e = G.entities[id];
+  await Promise.all([...shifts, addTween(id, s, e.animal && e.group === 'monkey' ? 330 : 380, e.animal && e.group === 'monkey')]);
+  busy = false;
+  setStatus(`${e.name}が船に乗りました。`);
+}
+async function disembark(id) {
+  if (busy || G.cleared) return;
+  G.hintIds = [];
+  G.boat = G.boat.filter(x => x !== id);
+  Sound.pop();
+  const s = bankSlots(G.pos[id])[id];
+  busy = true;
+  const e = G.entities[id];
+  const isMonkey = e.animal && e.group === 'monkey';
+  await addTween(id, s, isMonkey ? 300 : 380, isMonkey);
+  // 座席の詰め直し
+  await Promise.all(G.boat.map((pid, i) => addTween(pid, boatSlot(i), 160, false)));
+  busy = false;
+  setStatus(`${e.name}が岸に戻りました。`);
+}
+
+async function go() {
+  if (busy || G.cleared) return;
+  if (G.boat.length === 0) { setStatus('まず、岸の人をタップして船に乗せてください。', true); return; }
+  if (!G.boat.some(id => G.entities[id].rower)) {
+    setStatus('漕げる人が乗っていません。出発できません。', true);
+    Sound.warn();
+    return;
+  }
+  const chk = departureCheck(G.boat);
+  if (!chk.ok) {
+    G.warnIds = chk.danger.ids;
+    G.warnUntil = performance.now() + 1500;
+    setStatus(`あぶない！「${chk.danger.label}」の組み合わせが残ってしまいます。乗せる人を変えてみましょう。`, true);
+    Sound.warn();
+    return;
+  }
+  G.hintIds = [];
+  G.history.push(snapshot());
+  const pass = [...G.boat];
+  const dest = G.boatSide === 'L' ? 'R' : 'L';
+  busy = true;
+  Sound.rowing(1.9);
+  boatAnim = { t0: performance.now(), dur: 1900, from: boatX, to: dest === 'R' ? SCENE.dockR : SCENE.dockL };
+  await new Promise(r => setTimeout(r, 1950));
+  for (const id of pass) G.pos[id] = dest;
+  G.boatSide = dest;
+  G.boat = [];
+  G.moves++;
+  Sound.splash(0);
+  // 着岸：サルは飛び降りる、人は歩いて降りる
+  const slots = bankSlots(dest);
+  await Promise.all(pass.map((id, i) => {
+    const e = G.entities[id];
+    const isMonkey = e.animal && e.group === 'monkey';
+    return addTween(id, slots[id], isMonkey ? 300 + i * 60 : 420 + i * 60, isMonkey);
+  }));
+  busy = false;
+  if (Object.values(G.pos).every(p => p === 'R')) {
+    G.cleared = true;
+    Sound.fanfare();
+    for (let i = 0; i < 90; i++) {
+      confetti.push({
+        x: 360 + (Math.random() - 0.5) * 260, y: 180 + Math.random() * 40,
+        vx: (Math.random() - 0.5) * 2.4, vy: -1 - Math.random() * 2,
+        rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3,
+        life: 1, color: ['#e2574c', '#f2a541', '#f5d76e', '#58a65c', '#4a7ec2'][i % 5]
+      });
+    }
+    setStatus(G.moves === G.best
+      ? `クリア！ しかも最短の${G.best}手で渡れました。見事です！`
+      : `クリア！ ${G.moves}手で全員渡れました（この条件の最短は${G.best}手）。もう一度、最短を目指すのも楽しいですよ。`);
+  } else {
+    setStatus(`${G.moves}手目：向こう岸に着きました。`);
+  }
+  updateRest();
+}
+
+function undo() {
+  if (busy) return;
+  const prev = G.history.pop();
+  if (!prev) { setStatus('これ以上は戻れません。'); return; }
+  G.pos = prev.pos; G.boatSide = prev.boatSide; G.moves = prev.moves;
+  G.boat = []; G.cleared = false; G.hintIds = [];
+  boatX = G.boatSide === 'L' ? SCENE.dockL : SCENE.dockR;
+  snapAll();
+  Sound.pop();
+  setStatus('1つ戻しました。');
+  updateRest();
+}
+function resetGame(keepStatus) {
+  G.pos = {}; G.boat = []; G.boatSide = 'L'; G.moves = 0; G.history = [];
+  G.cleared = false; G.hintIds = []; G.warnIds = []; confetti = [];
+  boatX = SCENE.dockL; boatAnim = null;
+  for (const e of castList()) G.pos[e.id] = 'L';
+  snapAll();
+  const sol = solve(G.stage, G.preset);
+  G.best = sol.solvable ? sol.shortest : null;
+  updateRest();
+  if (!keepStatus) setStatus('全員を向こう岸へ渡しましょう。まず乗せる人をタップしてください。');
+}
+function snapAll() {
+  const slotsL = bankSlots('L'), slotsR = bankSlots('R');
+  for (const e of castList()) {
+    const s = G.pos[e.id] === 'L' ? slotsL[e.id] : slotsR[e.id];
+    vis[e.id] = { x: s.x, y: s.y };
+  }
+}
+function showHint() {
+  if (busy || G.cleared) return;
+  const h = updateRest();
+  if (!h.pass) { setStatus('ヒントが見つかりませんでした。', true); return; }
+  G.hintIds = h.pass;
+  const names = h.pass.map(id => G.entities[id].name).join('と');
+  setStatus(`ヒント：${names}を乗せて渡ってみましょう（あと${h.dist}手でゴールできます）。`);
+  Sound.pop();
+}
+
+/* ---------- ステージ・プリセットの説明 ---------- */
+function descFor(stage, pr) {
+  const parts = [`船の定員 ${pr.cap}人`];
+  if (stage.key === 'classic') {
+    if (pr.extra === 'chicken') parts.push('ニワトリも一緒に運びます（ニワトリは誰とも危ない組み合わせになりません）');
+  } else if (stage.key === 'monkey') {
+    parts.push(`ヒト${pr.humans}人・大きいサル1匹・小さいサル${pr.small}匹`);
+  } else if (stage.key === 'missionary') {
+    parts.push(`宣教師${pr.pairs}人・人食い${pr.pairs}人`);
+  } else if (stage.key === 'farm2') {
+    parts.push(pr.leviathan ? 'リバイアサン入り' : 'レタス・ラマ・ライオンの3つ');
+    if (pr.assistant) parts.push('助手（漕げて、見張りもできる人）が加わります');
+  } else if (stage.key === 'family') {
+    parts.push(`娘${pr.daughters}人・息子${pr.sons}人`);
+  }
+  return parts.join('／');
+}
+function renderRules() {
+  const items = [...G.stage.ruleText];
+  const rowers = castList().filter(e => e.rower).map(e => e.name);
+  // 漕げる人のまとめ表示（同名が続く場合は人数で）
+  items.unshift(`船の定員は${G.preset.cap}人です`);
+  const ul = document.getElementById('ruleList');
+  ul.innerHTML = items.map(t => `<li>${t}</li>`).join('');
+  document.getElementById('stageTitle').textContent = G.stage.title;
+  document.getElementById('stageStory').textContent = G.stage.story;
+  document.getElementById('presetDesc').textContent = descFor(G.stage, G.preset) + `（最短 ${G.best} 手）`;
+}
+function loadStage(idx, presetKey) {
+  G.stageIdx = idx;
+  G.stage = resolveStage(STAGES[idx], STAGES[idx].presets.find(p => p.key === presetKey) || STAGES[idx].presets[1]);
+  G.preset = STAGES[idx].presets.find(p => p.key === presetKey) || STAGES[idx].presets[1];
+  G.stage = resolveStage(STAGES[idx], G.preset);
+  G.entities = {};
+  for (const e of castList()) G.entities[e.id] = e;
+  // ステージボタンとプリセットボタンの表示
+  document.querySelectorAll('#stageRow button').forEach((b, i) => b.classList.toggle('on', i === idx));
+  const seg = document.getElementById('presetSeg');
+  seg.innerHTML = '';
+  for (const pr of STAGES[idx].presets) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = pr.name;
+    b.classList.toggle('on', pr.key === G.preset.key);
+    b.addEventListener('click', () => { loadStage(G.stageIdx, pr.key); Sound.pop(); });
+    seg.appendChild(b);
+  }
+  resetGame();
+  renderRules();
+  document.getElementById('sheetResult').style.display = 'none';
+  document.getElementById('sheetStatus').textContent = '';
+}
+
+/* ---------- ワークシート ---------- */
+function wrapLines(ctx, text, maxW) {
+  const lines = [];
+  let cur = '';
+  for (const ch of text) {
+    if (ch === '\n') { lines.push(cur); cur = ''; continue; }
+    if (ctx.measureText(cur + ch).width > maxW && cur) { lines.push(cur); cur = ch; }
+    else cur += ch;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+function buildSheet() {
+  const cv = document.createElement('canvas');
+  cv.width = 2480; cv.height = 3508;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  const M = 120, W = cv.width - M * 2;
+  let y = 130;
+  ctx.fillStyle = '#22303a';
+  ctx.textAlign = 'left';
+  ctx.font = '700 66px sans-serif';
+  ctx.fillText('川渡りパズル ワークシート', M, y);
+  y += 30;
+  ctx.font = '42px sans-serif';
+  ctx.fillText(`${G.stage.title}（${G.preset.name}）`, M, y + 58);
+  // 名前欄
+  ctx.font = '40px sans-serif';
+  ctx.fillText('名前：', cv.width - M - 760, y + 58);
+  ctx.strokeStyle = '#22303a'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cv.width - M - 610, y + 66); ctx.lineTo(cv.width - M, y + 66); ctx.stroke();
+  y += 150;
+  ctx.font = '700 46px sans-serif';
+  ctx.fillText('もんだい', M, y); y += 26;
+  ctx.font = '40px sans-serif';
+  for (const line of wrapLines(ctx, G.stage.story, W)) { ctx.fillText(line, M, y + 52); y += 66; }
+  y += 30;
+  ctx.font = '700 46px sans-serif';
+  ctx.fillText('条件', M, y); y += 26;
+  ctx.font = '40px sans-serif';
+  const castNames = castList().map(e => `${e.emoji}${e.name}`).join('　');
+  const condLines = [
+    `登場する人ともの：${castNames}`,
+    `船の定員：${G.preset.cap}人`,
+    ...G.stage.ruleText
+  ];
+  for (const t of condLines) for (const line of wrapLines(ctx, '・' + t, W)) { ctx.fillText(line, M, y + 52); y += 66; }
+  y += 34;
+  // 記録表
+  ctx.font = '700 46px sans-serif';
+  ctx.fillText('手順の記録表', M, y); y += 30;
+  const rows = Math.min((G.best || 10) + 6, 16);
+  const rowH = 96, headH = 76;
+  const colW = [240, 1050, W - 240 - 1050];
+  ctx.lineWidth = 2.5; ctx.strokeStyle = '#55606a';
+  let ty = y;
+  ctx.fillStyle = '#eef4f8';
+  ctx.fillRect(M, ty, W, headH);
+  ctx.strokeRect(M, ty, W, headH);
+  ctx.fillStyle = '#22303a'; ctx.font = '700 38px sans-serif';
+  ctx.fillText('回数', M + 40, ty + 52);
+  ctx.fillText('乗る人', M + colW[0] + 40, ty + 52);
+  ctx.fillText('メモ（岸の様子など）', M + colW[0] + colW[1] + 40, ty + 52);
+  let cx = M;
+  for (let c = 0; c < 2; c++) { cx += colW[c]; ctx.beginPath(); ctx.moveTo(cx, ty); ctx.lineTo(cx, ty + headH + rowH * rows); ctx.stroke(); }
+  ty += headH;
+  ctx.font = '38px sans-serif';
+  for (let r = 0; r < rows; r++) {
+    ctx.strokeRect(M, ty, W, rowH);
+    ctx.fillText(`${r + 1}回目`, M + 40, ty + 62);
+    ty += rowH;
+  }
+  y = ty + 60;
+  // 考え欄
+  ctx.font = '700 46px sans-serif'; ctx.fillStyle = '#22303a';
+  ctx.fillText('考えを書く欄', M, y); y += 24;
+  const thinkH = Math.max(360, 3508 - 300 - y - 560);
+  ctx.strokeStyle = '#9db3c0'; ctx.lineWidth = 2;
+  for (let ly = y + 84; ly < y + thinkH; ly += 84) { ctx.beginPath(); ctx.moveTo(M, ly); ctx.lineTo(M + W, ly); ctx.stroke(); }
+  y += thinkH + 66;
+  ctx.font = '700 46px sans-serif';
+  ctx.fillText('ふりかえり', M, y); y += 24;
+  for (let ly = y + 84; ly < 3508 - 260; ly += 84) { ctx.beginPath(); ctx.moveTo(M, ly); ctx.lineTo(M + W, ly); ctx.stroke(); }
+  ctx.font = '32px sans-serif'; ctx.fillStyle = '#5d7183';
+  ctx.fillText('川渡りパズル（アプリ）のワークシート', M, 3508 - 90);
+  return { canvas: cv, rows };
+}
+let sheetUrl = null;
+function exportSheet() {
+  const status = document.getElementById('sheetStatus');
+  try {
+    const { canvas } = buildSheet();
+    const show = url => {
+      document.getElementById('sheetImg').src = url;
+      const dl = document.getElementById('sheetDl');
+      dl.href = url;
+      dl.setAttribute('download', `kawawatari-sheet-${G.stage.key}-${G.preset.key}.png`);
+      document.getElementById('sheetResult').style.display = 'block';
+      status.textContent = 'ワークシートを表示しました。画像を長押しして保存してください。';
+      document.getElementById('sheetResult').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    if (canvas.toBlob) {
+      canvas.toBlob(blob => {
+        if (blob) {
+          if (sheetUrl) URL.revokeObjectURL(sheetUrl);
+          sheetUrl = URL.createObjectURL(blob);
+          show(sheetUrl);
+        } else {
+          try { show(canvas.toDataURL('image/png')); } catch (e) { status.textContent = '画像の作成に失敗しました。もう一度お試しください。'; }
+        }
+      }, 'image/png');
+    } else {
+      show(canvas.toDataURL('image/png'));
+    }
+  } catch (e) {
+    status.textContent = '画像の作成に失敗しました。もう一度お試しください。';
+  }
+}
+
+/* ---------- 初期化 ---------- */
+function init() {
+  const row = document.getElementById('stageRow');
+  STAGES.forEach((st, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = st.short;
+    b.addEventListener('click', () => { loadStage(i, G.stageIdx === i ? G.preset.key : 'normal'); Sound.pop(); });
+    row.appendChild(b);
+  });
+  const sb = document.getElementById('soundBtn');
+  const saved = (() => { try { return window.localStorage.getItem('kawawatari_sound'); } catch (e) { return null; } })();
+  if (saved === 'off') Sound.enabled = false;
+  const paintSound = () => { sb.textContent = Sound.enabled ? '🔊 音：オン' : '🔇 音：オフ'; };
+  paintSound();
+  sb.addEventListener('click', () => {
+    Sound.enabled = !Sound.enabled;
+    try { window.localStorage.setItem('kawawatari_sound', Sound.enabled ? 'on' : 'off'); } catch (e) {}
+    paintSound();
+    if (Sound.enabled) Sound.pop();
+  });
+  const cv = document.getElementById('scene');
+  cv.addEventListener('pointerdown', ev => {
+    if (busy || G.cleared) return;
+    const r = cv.getBoundingClientRect();
+    const x = (ev.clientX - r.left) * (cv.width / r.width);
+    const y = (ev.clientY - r.top) * (cv.height / r.height);
+    const order = castList().map(e => e.id).reverse();
+    for (const id of order) {
+      const v = vis[id];
+      if (Math.abs(x - v.x) < 30 && Math.abs(y - v.y) < 34) {
+        if (G.boat.includes(id)) disembark(id);
+        else if (G.pos[id] === G.boatSide) board(id);
+        else setStatus('船は今、あちらの岸にあります。', true);
+        return;
+      }
+    }
+  });
+  document.getElementById('goBtn').addEventListener('click', go);
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('hintBtn').addEventListener('click', showHint);
+  document.getElementById('resetBtn').addEventListener('click', () => { if (!busy) { resetGame(); Sound.pop(); } });
+  document.getElementById('sheetBtn').addEventListener('click', () => { exportSheet(); Sound.pop(); });
+  loadStage(0, 'normal');
+  requestAnimationFrame(loop);
+  window.__kawaBooted = true;
+}
+
+window.__kawa = {
+  G, STAGES, solve, hintFrom, checkBank, resolveStage,
+  loadStage, go, board, disembark, undo, showHint, buildSheet, departureCheck,
+  state: () => ({ pos: { ...G.pos }, boat: [...G.boat], boatSide: G.boatSide, moves: G.moves, best: G.best, cleared: G.cleared })
+};
+
+try {
+  init();
+} catch (e) {
+  const b = document.getElementById('bootError');
+  if (b) b.style.display = 'block';
+  throw e;
+}
+
+</script>
+</body>
+</html>
